@@ -7,6 +7,8 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
@@ -22,12 +24,21 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.util.EntityUtils;
+
 public class LocationSampleActivity extends AppCompatActivity implements LocationListener, GpsStatus.Listener {
 
     private static final String TAG = "locationtest";
     private static final int TWO_MINUTES = 1000 * 60 * 2;
     private static final int INSIDE_HOME = 0;
     private static final int OUTSIDE_HOME = 1;
+    private static final String IOT_URI = "http://192.168.43.113/IoT.html";
     LocationManager mLocationManager;
     Location mLocation, mPreLocation;
     Thread mThread = null;
@@ -54,6 +65,8 @@ public class LocationSampleActivity extends AppCompatActivity implements Locatio
     private float mDistance = 0;
     private float mAverageGpsSnrValue;
     private int mAverageGpsSnrNum;
+    //Doorevent
+    private String mDoorEventStr;
 
     private OnClickListener startLocationListener = new OnClickListener() {
         public void onClick(View v) {
@@ -84,6 +97,7 @@ public class LocationSampleActivity extends AppCompatActivity implements Locatio
                 mComputeTimeThread.interrupt();
                 mComputeTimeThread = null;
             }
+
             if (mLocation != null) {
                 mLocation.reset();
                 mLocation = null;
@@ -167,12 +181,66 @@ public class LocationSampleActivity extends AppCompatActivity implements Locatio
         setContentView(R.layout.activity_location_sample);
         mLocationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
         initView();
+        mHandler.sendEmptyMessageDelayed(0, 1000 * 5);
+
     }
+
+    private Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch(msg.what) {
+                case 0:
+                    Log.d(TAG,"handle http");
+                    Thread getDooreventThread = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Log.d(TAG,"run");
+                            HttpClient client = new DefaultHttpClient();
+                            try{
+                                HttpGet httpRequest = new HttpGet(IOT_URI);
+                                HttpResponse httpResponse = client.execute(httpRequest);
+                                HttpEntity resEntity;
+                                Log.d(TAG,"getStatusCode :"+httpResponse.getStatusLine().getStatusCode());
+                                if (httpResponse.getStatusLine().getStatusCode() == 200) {
+                                    resEntity = httpResponse.getEntity();
+                                    final String strResult = new String(EntityUtils.toString(resEntity).getBytes("ISO_8859_1"),"UTF-8");
+                                    Log.d(TAG,"get data from http :"+strResult);
+                                    if(mDoorEventStr == null){
+                                        mDoorEventStr = strResult;
+                                    }
+                                    if(!strResult.equals(mDoorEventStr)){
+                                        runOnUiThread(new Runnable() {
+                                            public void run() {
+                                                mResult.setText("Get data from HTTP : "+strResult);
+                                                mOpenDoorButton.callOnClick();
+                                            }
+                                        });
+                                        mDoorEventStr = strResult;
+                                    }
+                                } else {
+                                    Log.d(TAG,"connect error");
+                                }
+                            }catch(Exception e){
+                                Log.d(TAG,"Exception "+e);
+                            }
+                            mHandler.sendEmptyMessageDelayed(0, 1000 * 5);
+                        }
+                    });
+                    getDooreventThread.start();
+                    break;
+            }
+        }
+    };
+
 
     @Override
     protected void onDestroy(){
         super.onDestroy();
         mStopButton.callOnClick();
+        if (mHandler != null) {
+            //mHandler.removeMessages(0);
+            mHandler.removeCallbacksAndMessages(0);
+        }
     }
 
     @Override
