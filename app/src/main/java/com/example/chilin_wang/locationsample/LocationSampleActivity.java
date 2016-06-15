@@ -16,6 +16,7 @@ import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
+import android.widget.TextView;
 
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -227,6 +228,7 @@ public class LocationSampleActivity extends AppCompatActivity implements Locatio
                         }
                     });
                     getDooreventThread.start();
+                    getDooreventThread.setName("mGetDooreventThread");
                     break;
             }
         }
